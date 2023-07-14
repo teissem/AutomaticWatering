@@ -7,6 +7,8 @@
 #include "AnodeLEDRGB.h"
 #include "ColorLEDRGB.h"
 #include "DayAlarm.h"
+#include "ExternalEEPROM.h"
+#include "EEPROMMemoryManager.h"
 
 #define RELAY_PIN 26
 #define LED_RED_PIN 27
@@ -14,6 +16,7 @@
 #define LED_BLUE_PIN 14
 #define ALARM_NUMBER 9
 #define RTC_I2C_ADDRESS 0x68
+#define EEPROM_I2C_ADDRESS 0x50
 
 // State enumeration
 enum AutomaticWateringState {ON, OFF, AUTO};
@@ -24,6 +27,8 @@ AutomaticWateringState state;
 RealTimeClockDS3231 rtcDS3231(RTC_I2C_ADDRESS);
 AnodeLEDRGB ledRGB(LED_RED_PIN, LED_BLUE_PIN, LED_GREEN_PIN);
 DayAlarm alarms[ALARM_NUMBER];
+ExternalEEPROM eeprom(EEPROM_I2C_ADDRESS);
+EEPROMMemoryManager memoryManager;
 int currentNumberOfAlarms;
 bool shouldBeActive;
 
@@ -45,8 +50,18 @@ void setup() {
     pinMode(LED_GREEN_PIN, OUTPUT);
     pinMode(LED_BLUE_PIN, OUTPUT);
     // Variable Initialization
-    state = OFF;
-    currentNumberOfAlarms = 0;
+    memoryManager.setExternalEEPROM(&eeprom);
+    memoryManager.setAlarms(alarms, 0);
+    if (memoryManager.readOnEEPROM()){
+        state = static_cast<AutomaticWateringState>(memoryManager.getState());
+        currentNumberOfAlarms = memoryManager.getNumberOfAlarms();
+        for (int i = 0; i < currentNumberOfAlarms; i++) {
+            alarms[i] = *(memoryManager.getAlarm(i));
+        }
+    } else {
+        state = OFF;
+        currentNumberOfAlarms = 0;
+    }
 }
 
 void loop() {
@@ -62,14 +77,20 @@ void loop() {
         else if (text == "ON"){ 
             state = ON;
             SerialBT.println("Turn to state ON");
+            memoryManager.setState((byte) state);
+            memoryManager.writeOnEEPROM();
         }
         else if (text == "OFF"){ 
             state = OFF;
             SerialBT.println("Turn to state OFF");
+            memoryManager.setState((byte) state);
+            memoryManager.writeOnEEPROM();
         }
         else if (text == "AUTO") {
             state = AUTO;
             SerialBT.println("Turn to state AUTO");
+            memoryManager.setState((byte) state);
+            memoryManager.writeOnEEPROM();
         }
         else if (text == "GET TIME") {
             printCurrentTime();
@@ -84,10 +105,14 @@ void loop() {
         else if (strncmp(text.c_str(), "SET ALARM", 9) == 0) {
             setAlarm(text);
             printAlarms();
+            memoryManager.setAlarms(alarms, currentNumberOfAlarms);
+            memoryManager.writeOnEEPROM();
         }
         else if (strncmp(text.c_str(), "DEL ALARM", 9) == 0) {
             delAlarm(text);
             printAlarms();
+            memoryManager.setAlarms(alarms, currentNumberOfAlarms);
+            memoryManager.writeOnEEPROM();
         }
         else {
             SerialBT.print("Unknown command : ");

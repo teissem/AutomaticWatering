@@ -1,5 +1,5 @@
 #ifndef EXTERNAL_EEPROM_H
-#define EXTERNALEEPROM_H
+#define EXTERNAL_EEPROM_H
 
 #include <Arduino.h>
 
